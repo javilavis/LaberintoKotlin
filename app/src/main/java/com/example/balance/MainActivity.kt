@@ -41,6 +41,7 @@ import com.google.androidgamesdk.gametextinput.Settings
 import java.security.MessageDigest
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sqrt
 
 
 class MainActivity : ComponentActivity() {
@@ -56,56 +57,64 @@ class MainActivity : ComponentActivity() {
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun LaberintoScreen(contexto: Context) {
+    val uuid = "d2aca40cee063efa414b3126cd04fb720c90f701eb1e87f3c5ab8f891d5665b5"
     val admonSensores = remember { contexto.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
     val acelerometro = remember { admonSensores.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) }
 
+    // Estados de posición
     var posX by remember { mutableStateOf(-1f) }
     var posY by remember { mutableStateOf(-1f) }
     var juegoGanado by remember { mutableStateOf(false) }
 
-    val radioPelota = 28f // Un poco más pequeña para pasillos finos
-    val velocidad = 2.4f
-
-    val uuid = "d2aca40cee063efa414b3126cd04fb720c90f701eb1e87f3c5ab8f891d5665b5"
+    val radioPelota = 25f
+    val velocidad = 2.5f
 
     Box(modifier = Modifier.fillMaxSize()) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val ancho = constraints.maxWidth.toFloat()
             val alto = constraints.maxHeight.toFloat()
 
-            // Posición inicial
+            // 1. ORIGEN: Abajo a la izquierda (10% ancho, 90% alto)
             if (posX == -1f) {
-                posX = ancho * 0.05f
-                posY = alto * 0.05f
+                posX = ancho * 0.1f
+                posY = alto * 0.96f
             }
 
-            // --- DEFINICIÓN DE PAREDES DELGADAS ---
-            // Definimos un grosor constante (1.5% del ancho de pantalla)
-            val g = ancho * 0.015f
+            // 2. META: Círculo arriba en el centro (donde suele estar la cámara)
+            val centroMetaX = ancho / 2
+            val centroMetaY = alto * 0.026f
+            val radioMeta = 45f
 
+            // 3. PAREDES (Diseño en Zig-Zag para asegurar salida)
+            val g = ancho * 0.02f // Grosor de paredes
             val paredes = remember(ancho, alto) {
                 listOf(
-                    // Horizontales (Izquierda, Arriba, Derecha, Abajo)
-                    Rect(ancho* 0.1f, alto * 0.15f, ancho * 0.6f, alto * 0.15f + g),
-                    Rect(ancho * 0.3f, alto * 0.3f, ancho * 0.85f, alto * 0.3f + g),
-                    Rect(0f, alto * 0.45f, ancho * 0.6f, alto * 0.45f + g),
-                    Rect(ancho * 0.4f, alto * 0.6f, ancho, alto * 0.6f + g),
-                    Rect(0f, alto * 0.75f, ancho * 0.8f, alto * 0.75f + g),
-                    Rect(ancho * 0.2f, alto * 0.9f, ancho, alto * 0.9f + g),
+                    // Horizontales de arriba pabajo0
+                    //primera pegada
+                    Rect(0f, alto * 0.1f, ancho * 0.4f, alto * 0.1f + g),
+                    Rect(ancho * 0.55f, alto * 0.25f, ancho * 0.8f, alto * 0.25f + g),
+                    Rect(ancho * 0.4f, alto * 0.45f, ancho * 0.8f, alto * 0.45f + g),
+                    Rect(0f, alto * 0.6f, ancho * 0.28f, alto * 0.6f + g),
 
-                    // Verticales (Izquierda, Arriba, Derecha, Abajo)
-                    Rect(ancho * 0.75f, 0f, ancho * 0.7f + g, alto * 0.15f),
-                    Rect(ancho * 0.3f, alto * 0.15f, ancho * 0.3f + g, alto * 0.3f),
-                    Rect(ancho * 0.6f, alto * 0.3f, ancho * 0.6f + g, alto * 0.5f),
-                    Rect(ancho * 0.4f, alto * 0.65f, ancho * 0.4f + g, alto * 0.75f)
+                    Rect(ancho * 0.4f, alto * 0.6f, ancho * 0.75f, alto * 0.6f + g),
+                    Rect(ancho * 0.2f, alto * 0.8f, ancho * 0.91f, alto * 0.8f + g),
+                    Rect(0f, alto * 0.9f, ancho * 0.45f, alto * 0.9f + g),
+                    Rect(ancho * 0.65f, alto * 0.9f, ancho, alto * 0.9f + g),
+
+
+                    // Verticales
+                    Rect(ancho * 0.4f, alto * 0.1f, ancho * 0.4f + g, alto * 0.45f),
+                    Rect(ancho * 0.55f, 0f, ancho * 0.55f + g, alto * 0.25f),
+                    Rect(ancho * 0.78f, alto * 0.05f, ancho * 0.78f + g, alto * 0.25f),
+
+                    Rect(ancho * 0.26f, alto * 0.2f, ancho * 0.26f + g, alto * 0.6f),
+                    Rect(ancho * 0.4f, alto * 0.6f, ancho * 0.4f + g, alto * 0.8f),
+                    Rect(ancho * 0.9f, alto * 0.55f, ancho * 0.9f + g, alto * 0.8f),
+                    Rect(ancho * 0.55f, alto * 0.8f, ancho * 0.55f + g, alto)
                 )
             }
 
-            val meta = remember(ancho, alto) {
-                Rect(ancho * 0.85f, alto * 0.92f, ancho * 0.98f, alto * 0.98f)
-            }
-
-            // --- LÓGICA DE SENSORES ---
+            // 4. LÓGICA DE SENSORES Y COLISIÓN
             val listener = remember {
                 object : SensorEventListener {
                     override fun onAccuracyChanged(s: Sensor?, a: Int) {}
@@ -115,19 +124,23 @@ fun LaberintoScreen(contexto: Context) {
                         val moverX = -(event.values[0] * velocidad)
                         val moverY = (event.values[1] * velocidad)
 
-                        // Deslizamiento en X
-                        val futuraX = (posX + moverX).coerceIn(radioPelota, ancho - radioPelota)
-                        if (!paredes.any { it.overlaps(Rect(futuraX - radioPelota, posY - radioPelota, futuraX + radioPelota, posY + radioPelota)) }) {
-                            posX = futuraX
+                        // Intento movimiento X
+                        val futX = (posX + moverX).coerceIn(radioPelota, ancho - radioPelota)
+                        if (!paredes.any { it.overlaps(Rect(futX - radioPelota, posY - radioPelota, futX + radioPelota, posY + radioPelota)) }) {
+                            posX = futX
                         }
 
-                        // Deslizamiento en Y
-                        val futuraY = (posY + moverY).coerceIn(radioPelota, alto - radioPelota)
-                        if (!paredes.any { it.overlaps(Rect(posX - radioPelota, futuraY - radioPelota, posX + radioPelota, futuraY + radioPelota)) }) {
-                            posY = futuraY
+                        // Intento movimiento Y
+                        val futY = (posY + moverY).coerceIn(radioPelota, alto - radioPelota)
+                        if (!paredes.any { it.overlaps(Rect(posX - radioPelota, futY - radioPelota, posX + radioPelota, futY + radioPelota)) }) {
+                            posY = futY
                         }
 
-                        if (meta.overlaps(Rect(posX - radioPelota, posY - radioPelota, posX + radioPelota, posY + radioPelota))) {
+                        // VERIFICAR META (Distancia entre centros: Pitágoras)
+                        val distanciaAMeta = sqrt(Math.pow((posX - centroMetaX).toDouble(), 2.0) +
+                                Math.pow((posY - centroMetaY).toDouble(), 2.0))
+
+                        if (distanciaAMeta < radioMeta) {
                             juegoGanado = true
                         }
                     }
@@ -139,18 +152,27 @@ fun LaberintoScreen(contexto: Context) {
                 onDispose { admonSensores.unregisterListener(listener) }
             }
 
-            // --- RENDERIZADO ---
+            // 5. DIBUJO DEL JUEGO
             Canvas(modifier = Modifier.fillMaxSize()) {
-                // Meta
-                drawRect(color = Color(0xFF00FF7F), topLeft = meta.topLeft, size = meta.size)
+                // Dibujar Meta (Círculo tipo "Hoyo" de golf)
+                drawCircle(
+                    color = Color.Black,
+                    radius = radioMeta,
+                    center = Offset(centroMetaX, centroMetaY)
+                )
+                drawCircle(
+                    color = Color(0xFF00FF7F), // Brillo verde
+                    radius = radioMeta * 0.8f,
+                    center = Offset(centroMetaX, centroMetaY)
+                )
 
-                // Paredes
-                paredes.forEach { drawRect(color = Color(0xFF2C3E50), it.topLeft, it.size) }
+                // Dibujar Paredes
+                paredes.forEach { drawRect(color = Color(0xFF34495E), it.topLeft, it.size) }
 
-                // Pelota
+                // Dibujar Pelota
                 drawCircle(
                     brush = Brush.radialGradient(
-                        colors = listOf(Color(0xFFFF5722), Color(0xFFBF360C)), // Naranja fuego
+                        colors = listOf(Color(0xFFFFD700), Color(0xFFFFA500)),
                         center = Offset(posX - 4f, posY - 4f),
                         radius = radioPelota
                     ),
@@ -159,24 +181,25 @@ fun LaberintoScreen(contexto: Context) {
                 )
             }
 
-            // --- PANTALLA DE VICTORIA ---
+            // 6. INTERFAZ DE VICTORIA
             if (juegoGanado) {
                 Box(
-                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)),
+                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(green = 0.3f, alpha = 0.5f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("¡MAESTRO DEL BALANCE!", style = MaterialTheme.typography.headlineLarge, color = Color.White)
-                        Text("UUID: $uuid", style = MaterialTheme.typography.headlineLarge, color = Color.White)
-
+                        Text("¡Victoria!", style = MaterialTheme.typography.headlineLarge, color = Color.White)
                         Spacer(modifier = Modifier.height(20.dp))
+
                         Button(onClick = {
-                            posX = ancho * 0.05f
-                            posY = alto * 0.05f
+                            posX = ancho * 0.1f
+                            posY = alto * 0.96f
                             juegoGanado = false
                         }) {
                             Text("Reiniciar")
                         }
+                        Spacer(modifier = Modifier.height(500.dp))
+                        Text("UUID: \n$uuid", style = MaterialTheme.typography.headlineSmall, color = Color.White)
                     }
                 }
             }

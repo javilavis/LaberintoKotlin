@@ -43,52 +43,47 @@ class MainActivity : ComponentActivity() {
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun LaberintoScreen(contexto: Context) {
-    // 'remember' hace que la variable no se reinicie cada vez que la pantalla se dibuja de nuevoo
-    val admonSensores = remember {
-        // Obtenemos el servicio del sistema que controla el hardware (sensores)
-        contexto.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    // 1. GESTIÓN DE SENSORES (Igual que antes, nuestro "motor" de movimiento)
+    val admonSensores = remember { contexto.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
+    val acelerometro = remember { admonSensores.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) }
+
+    var posX by remember { mutableStateOf(150f) }
+    var posY by remember { mutableStateOf(150f) }
+    val radioPelota = 35f // La hicimos un pelín más pequeña para que quepa en los pasillos
+    val velocidad = 1.8f
+
+    // 2. EL MAPA: Una lista de rectángulos (paredes)
+    // Usamos 'Rect' para definir (izquierda, arriba, derecha, abajo)
+    val paredes = remember {
+        listOf(
+            androidx.compose.ui.geometry.Rect(0f, 300f, 600f, 350f),   // Pared horizontal superior
+            androidx.compose.ui.geometry.Rect(400f, 600f, 1000f, 650f), // Pared horizontal inferior
+            androidx.compose.ui.geometry.Rect(400f, 350f, 450f, 600f),  // Columna vertical
+            androidx.compose.ui.geometry.Rect(700f, 0f, 750f, 450f)     // Otra columna
+        )
     }
 
-    val acelerometro = remember {
-        // De todos los sensores, pedimos específicamente el de movimiento (acelerómetro)
-        admonSensores.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-    }
-
-    // 'mutableStateOf' crea variables que, al cambiar, "avisan" a la pantalla para que se redibuje
-    var posX by remember { mutableStateOf(200f) } // Posición horizontal inicial
-    var posY by remember { mutableStateOf(200f) } // Posición vertical inicial
-
-    // Valores fijos para nuestro juego
-    val radioPelota = 45f
-    val velocidad = 1.5f
-
-    // Creamos un rectángulo virtual: (izquierda, arriba, derecha, abajo)
-    // Esto sirve para definir dónde está la pared en el espacio
-    val paredPrueba = remember {
-        androidx.compose.ui.geometry.Rect(400f, 600f, 800f, 650f)
-    }
-
-    /*La parte de los sensores*/
     val listener = remember {
         object : SensorEventListener {
-            // Este es obligatorio pero casi nunca se usa (cambios en precisión del sensor)
             override fun onAccuracyChanged(s: Sensor?, a: Int) {}
-            // Este se ejecuta MILES de veces por segundo cuando mueves el celular
             override fun onSensorChanged(event: SensorEvent) {
-                // event.values[0] es la inclinación en X, values[1] en Y
-                // Calculamos a dónde QUERRÍA ir la pelota (nueva posición tentativa)
+                // Calculamos hacia dónde se quiere mover la pelota en este instante
                 val nuevaX = posX - (event.values[0] * velocidad)
                 val nuevaY = posY + (event.values[1] * velocidad)
 
-                // Creamos un cuadrado imaginario alrededor de la "futura" pelota para ver si choca
+                // Creamos el "área de impacto" de la pelota en su futura posición
                 val areaPelotaFutura = androidx.compose.ui.geometry.Rect(
                     nuevaX - radioPelota, nuevaY - radioPelota,
                     nuevaX + radioPelota, nuevaY + radioPelota
                 )
 
-                // 'overlaps' devuelve true si dos rectángulos se tocan
-                // "Si NO hay choque con la pared, entonces actualiza la posición real"
-                if (!paredPrueba.overlaps(areaPelotaFutura)) {
+                // 3. DETECCIÓN GLOBAL DE COLISIONES
+                // '.any' recorre toda la lista de paredes.
+                // Devuelve 'true' si la pelota choca con AL MENOS UNA pared.
+                val chocaConAlgo = paredes.any { pared -> pared.overlaps(areaPelotaFutura) }
+
+                // Si NO choca con ninguna de las paredes de la lista, actualizamos la posición
+                if (!chocaConAlgo) {
                     posX = nuevaX
                     posY = nuevaY
                 }
@@ -96,43 +91,42 @@ fun LaberintoScreen(contexto: Context) {
         }
     }
 
-// Este bloque gestiona cuándo conectar el sensor
+    // 4. REGISTRO DEL SENSOR (Encender/Apagar para ahorrar batería)
     DisposableEffect(Unit) {
-        // Al empezar: "Oye Android, empieza a mandarme datos del acelerómetro"
         admonSensores.registerListener(listener, acelerometro, SensorManager.SENSOR_DELAY_GAME)
-
-        // Al cerrar la app o cambiar de pantalla: "Oye, deja de gastar batería, apaga el sensor"
         onDispose { admonSensores.unregisterListener(listener) }
     }
 
-    // BoxWithConstraints nos permite saber qué tan grande es la pantalla del celular actual
+    // 5. EL LIENZO (Donde dibujamos todo)
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val anchoPantalla = constraints.maxWidth.toFloat()
         val altoPantalla = constraints.maxHeight.toFloat()
 
-        // .coerceIn asegura que el valor no se pase de los límites (mínimo, máximo)
-        // Evita que la pelota se salga de los bordes del celular
+        // Ajustamos la pelota para que no se salga de los bordes del celular
         posX = posX.coerceIn(radioPelota, anchoPantalla - radioPelota)
         posY = posY.coerceIn(radioPelota, altoPantalla - radioPelota)
 
-        // Aquí es donde sucede la "magia" visual
         Canvas(modifier = Modifier.fillMaxSize()) {
-            // Dibujamos el rectángulo de la pared usando las coordenadas de 'paredPrueba'
-            drawRect(color = Color.DarkGray, topLeft = paredPrueba.topLeft, size = paredPrueba.size)
+            // DIBUJAR TODAS LAS PAREDES
+            // Recorremos la lista y dibujamos cada una con un color más "elegante"
+            paredes.forEach { pared ->
+                drawRect(
+                    color = Color(0xFF333333), // Un gris oscuro casi negro
+                    topLeft = pared.topLeft,
+                    size = pared.size
+                )
+            }
 
-            // Dibujamos la pelota
+            // DIBUJAR LA PELOTA (Con el estilo que aprendimos antes)
             drawCircle(
-                // Creamos un degradado para que no se vea plana (efecto 3D)
                 brush = androidx.compose.ui.graphics.Brush.radialGradient(
-                    colors = listOf(Color.White, Color.Magenta, Color(0xFF4B0082)),
-                    // Movemos el centro de la luz un poquito arriba a la izquierda
-                    center = Offset(posX - 10f, posY - 10f),
+                    colors = listOf(Color.Cyan, Color(0xFF0055FF)), // Ahora azul cian para variar
+                    center = Offset(posX - 8f, posY - 8f),
                     radius = radioPelota
                 ),
                 radius = radioPelota,
-                center = Offset(posX, posY) // La posición central es la que nos da el sensor
+                center = Offset(posX, posY)
             )
         }
     }
-
 }

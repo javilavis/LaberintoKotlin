@@ -43,7 +43,7 @@ class MainActivity : ComponentActivity() {
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun LaberintoScreen(contexto: Context) {
-    // 'remember' hace que la variable no se reinicie cada vez que la pantalla se dibuja de nuevo
+    // 'remember' hace que la variable no se reinicie cada vez que la pantalla se dibuja de nuevoo
     val admonSensores = remember {
         // Obtenemos el servicio del sistema que controla el hardware (sensores)
         contexto.getSystemService(Context.SENSOR_SERVICE) as SensorManager

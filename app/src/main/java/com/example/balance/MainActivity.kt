@@ -6,6 +6,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -36,8 +37,11 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.google.androidgamesdk.gametextinput.Settings
+import java.security.MessageDigest
 import kotlin.math.max
 import kotlin.math.min
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -61,6 +65,8 @@ fun LaberintoScreen(contexto: Context) {
 
     val radioPelota = 28f // Un poco más pequeña para pasillos finos
     val velocidad = 2.4f
+
+    val uuid = "d2aca40cee063efa414b3126cd04fb720c90f701eb1e87f3c5ab8f891d5665b5"
 
     Box(modifier = Modifier.fillMaxSize()) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -161,6 +167,8 @@ fun LaberintoScreen(contexto: Context) {
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("¡MAESTRO DEL BALANCE!", style = MaterialTheme.typography.headlineLarge, color = Color.White)
+                        Text("UUID: $uuid", style = MaterialTheme.typography.headlineLarge, color = Color.White)
+
                         Spacer(modifier = Modifier.height(20.dp))
                         Button(onClick = {
                             posX = ancho * 0.05f
@@ -175,3 +183,19 @@ fun LaberintoScreen(contexto: Context) {
         }
     }
 }
+
+/*
+fun deviceSignature(context: Context): String {
+
+    val androidId = Settings.Secure.getString(
+        context.contentResolver,
+        Settings.Secure.ANDROID_ID
+    )
+
+    val data = androidId + Build.MODEL + Build.MANUFACTURER
+
+    val md = MessageDigest.getInstance("SHA-256")
+    val hash = md.digest(data.toByteArray())
+
+    return hash.joinToString("") { "%02x".format(it) }
+}*/
